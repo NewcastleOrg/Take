@@ -1,0 +1,538 @@
+name: Conflict Commit Cherry-pick
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: "Source repository, example my-org/backend"
+        required: true
+        type: string
+
+      source_branch:
+        description: "Source branch"
+        required: true
+        default: "main"
+        type: string
+
+      target_branch:
+        description: "Target branch"
+        required: true
+        type: string
+
+      commits:
+        description: "Commit SHA — separated by spaces"
+        required: true
+        type: string
+
+      exclude_paths:
+        description: "Exclusions: SHA:path,path"
+        required: false
+        type: string
+
+      use_github_author:
+        description: "Use GitHub Actions as author instead of original author"
+        required: false
+        type: boolean
+        default: false
+      use_github_committer:
+          description: "Use GitHub Actions as committer"
+          required: false
+          type: boolean
+          default: true
+
+      exclude_markdown:
+        description: "Always exclude all .md files"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  cherry-pick:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+
+      - name: Checkout target branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          git fetch origin "$TARGET_BRANCH"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+
+      - name: Add source repository
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+        run: |
+          git remote add source "https://github.com/$SOURCE_REPOSITORY.git"
+          git fetch source "$SOURCE_BRANCH" || true
+
+      - name: Prepare logs
+        run: |
+          : > /tmp/applied.log
+          : > /tmp/modified.log
+          : > /tmp/skipped.log
+
+      - name: Cherry-pick selected commits
+        env:
+          COMMITS: ${{ inputs.commits }}
+          EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
+          USE_GITHUB_AUTHOR: ${{ inputs.use_github_author }}
+          USE_GITHUB_COMMITTER: ${{ inputs.use_github_committer }}
+          EXCLUDE_MARKDOWN: ${{ inputs.exclude_markdown }}
+        shell: bash
+        run: |
+          set -o pipefail
+
+          # ==========================================================
+          # Normalize path, including invisible Unicode characters
+          # ==========================================================
+
+          normalize_path() {
+            local path="$1"
+
+            path="$(printf '%s' "$path" | perl -CS -pe 's/\p{Cf}//g')"
+            path="${path#./}"
+            path="${path#/}"
+
+            printf '%s' "$path"
+          }
+          add_markdown_exclusions() {
+            local excluded="$1"
+            local file
+
+            if [ "$EXCLUDE_MARKDOWN" != "true" ]; then
+              printf '%s' "$excluded"
+              return
+            fi
+
+            while IFS= read -r -d '' file; do
+              case "${file,,}" in
+                *.md)
+                  if [ -n "$excluded" ]; then
+                    excluded="$excluded,$file"
+                  else
+                    excluded="$file"
+                  fi
+                  ;;
+              esac
+            done < <(git diff-tree --root --no-commit-id --name-only -r -z "$CURRENT_COMMIT")
+
+            printf '%s' "$excluded"
+          }
+          # ==========================================================
+          # Create a commit using the selected author
+          # ==========================================================
+
+          run_git_commit() {
+            if [ "$USE_GITHUB_COMMITTER" = "true" ]; then
+              GIT_COMMITTER_NAME="GitHub Actions" \
+              GIT_COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com" \
+                git "$@"
+            else
+              git "$@"
+            fi
+          }
+
+          create_commit() {
+            if [ "$USE_GITHUB_AUTHOR" = "true" ]; then
+              echo "Commit author: GitHub Actions"
+
+              run_git_commit -c i18n.commitEncoding=UTF-8 commit \
+                --author="GitHub Actions <41898282+github-actions[bot]@users.noreply.github.com>" \
+                --file=/tmp/commit_message
+            else
+              echo "Commit author: $ORIGINAL_AUTHOR_NAME <$ORIGINAL_AUTHOR_EMAIL>"
+              echo "Original author date: $ORIGINAL_AUTHOR_DATE"
+
+              GIT_AUTHOR_DATE="$ORIGINAL_AUTHOR_DATE" \
+                run_git_commit -c i18n.commitEncoding=UTF-8 commit \
+                  --author="$ORIGINAL_AUTHOR_NAME <$ORIGINAL_AUTHOR_EMAIL>" \
+                  --file=/tmp/commit_message
+            fi
+          }
+
+          # ==========================================================
+          # Restore all excluded paths from target HEAD
+          # ==========================================================
+
+          restore_exclusions() {
+            local excluded="$1"
+            local path
+            local old_ifs="$IFS"
+
+            [ -z "$excluded" ] && return 0
+
+            IFS=','
+            for path in $excluded; do
+              path="$(normalize_path "$path")"
+              [ -z "$path" ] && continue
+
+              echo "Restoring excluded path: [$path]"
+
+              if git cat-file -e "HEAD:$path" 2>/dev/null; then
+                git restore \
+                  --source=HEAD \
+                  --staged \
+                  --worktree \
+                  -- "$path"
+              else
+                git rm -f --ignore-unmatch -- "$path" || true
+                rm -f -- "$path" || true
+              fi
+            done
+            IFS="$old_ifs"
+          }
+
+          # ==========================================================
+          # Verify excluded paths are not staged
+          # ==========================================================
+
+          verify_exclusions() {
+            local excluded="$1"
+            local path
+            local old_ifs="$IFS"
+            local failed=0
+
+            [ -z "$excluded" ] && return 0
+
+            IFS=','
+            for path in $excluded; do
+              path="$(normalize_path "$path")"
+              [ -z "$path" ] && continue
+
+              if git diff --cached --name-only -- "$path" |
+                 grep -Fxq -- "$path"; then
+                echo "ERROR: Excluded path is still staged: [$path]"
+                failed=1
+              else
+                echo "Verified excluded path: [$path]"
+              fi
+            done
+            IFS="$old_ifs"
+
+            return "$failed"
+          }
+
+          # ==========================================================
+          # Process commits
+          # ==========================================================
+
+          for commit in $COMMITS; do
+            echo ""
+            echo "========================================"
+            echo "Processing: $commit"
+            echo "========================================"
+
+            # --------------------------------------------------------
+            # Make sure the source commit is available
+            # --------------------------------------------------------
+
+            if ! git cat-file -e "$commit^{commit}" 2>/dev/null; then
+              echo "Commit is not available locally. Fetching..."
+              git fetch source "$commit" 2>/dev/null || true
+
+              if ! git cat-file -e "$commit^{commit}" 2>/dev/null; then
+                echo "$commit | commit not found or cannot be fetched" \
+                  >> /tmp/skipped.log
+                echo "SKIPPED: $commit"
+                continue
+              fi
+            fi
+
+            # --------------------------------------------------------
+            # Preserve original commit metadata before cherry-pick
+            # --------------------------------------------------------
+
+            ORIGINAL_AUTHOR_NAME="$(git log -1 --format='%an' "$commit")"
+            ORIGINAL_AUTHOR_EMAIL="$(git log -1 --format='%ae' "$commit")"
+            ORIGINAL_AUTHOR_DATE="$(git log -1 --format='%aI' "$commit")"
+
+            git log -1 --format=%B "$commit" > /tmp/commit_message
+
+            echo "Original author: $ORIGINAL_AUTHOR_NAME <$ORIGINAL_AUTHOR_EMAIL>"
+            echo "Original author date: $ORIGINAL_AUTHOR_DATE"
+            echo "Use GitHub Actions author: $USE_GITHUB_AUTHOR"
+
+            # --------------------------------------------------------
+            # Find exclusion rule matching this commit
+            # --------------------------------------------------------
+
+            EXCLUDED=""
+
+            for rule in $EXCLUDE_PATHS; do
+              RULE_SHA="${rule%%:*}"
+
+              if [ "$RULE_SHA" = "$commit" ]; then
+                EXCLUDED="${rule#*:}"
+                break
+              fi
+            done
+            CURRENT_COMMIT="$commit"
+            EXCLUDED="$(add_markdown_exclusions "$EXCLUDED")"
+
+            # --------------------------------------------------------
+            # Normalize all excluded paths
+            # --------------------------------------------------------
+
+            NORMALIZED_EXCLUDED=""
+
+            if [ -n "$EXCLUDED" ]; then
+              OLDIFS="$IFS"
+              IFS=','
+
+              for path in $EXCLUDED; do
+                RAW_PATH="$path"
+                path="$(normalize_path "$path")"
+
+                printf 'RAW PATH:        [%s]\n' "$RAW_PATH"
+                printf 'NORMALIZED PATH: [%s]\n' "$path"
+
+                [ -z "$path" ] && continue
+
+                if [ -n "$NORMALIZED_EXCLUDED" ]; then
+                  NORMALIZED_EXCLUDED="$NORMALIZED_EXCLUDED,$path"
+                else
+                  NORMALIZED_EXCLUDED="$path"
+                fi
+              done
+
+              IFS="$OLDIFS"
+            fi
+
+            EXCLUDED="$NORMALIZED_EXCLUDED"
+
+            echo "Final normalized exclusions:"
+            if [ -n "$EXCLUDED" ]; then
+              OLDIFS="$IFS"
+              IFS=','
+              for path in $EXCLUDED; do
+                printf '  [%s]\n' "$path"
+              done
+              IFS="$OLDIFS"
+            else
+              echo "  None"
+            fi
+
+            # --------------------------------------------------------
+            # Apply the commit without creating a commit yet
+            # --------------------------------------------------------
+
+            if git cherry-pick --no-commit "$commit"; then
+              echo "Cherry-pick completed without conflicts."
+
+              # Restore every excluded path, including non-conflicting files.
+              restore_exclusions "$EXCLUDED"
+
+              git add -A
+
+              if ! verify_exclusions "$EXCLUDED"; then
+                echo "Exclusion verification failed. Resetting."
+                git reset --hard HEAD
+                git cherry-pick --abort 2>/dev/null || true
+                echo "$commit | excluded paths still staged" \
+                  >> /tmp/skipped.log
+                continue
+              fi
+
+              if git diff --cached --quiet; then
+                echo "Nothing remains after exclusions."
+                git reset --hard HEAD
+                git cherry-pick --abort 2>/dev/null || true
+                echo "$commit | nothing to apply after exclusions" \
+                  >> /tmp/skipped.log
+                continue
+              fi
+
+              if create_commit; then
+                if [ -n "$EXCLUDED" ]; then
+                  echo "$commit | applied with exclusions: $EXCLUDED" \
+                    >> /tmp/modified.log
+                  echo "MODIFIED: $commit"
+                else
+                  echo "$commit | applied" >> /tmp/applied.log
+                  echo "APPLIED: $commit"
+                fi
+              else
+                git reset --hard HEAD
+                echo "$commit | failed to create commit" \
+                  >> /tmp/skipped.log
+              fi
+
+              continue
+            fi
+
+            # --------------------------------------------------------
+            # Cherry-pick has conflicts
+            # --------------------------------------------------------
+
+            echo "Conflict detected."
+
+            CONFLICTED_FILES="$(git diff --name-only --diff-filter=U)"
+            echo "Conflicted files:"
+            printf '%s\n' "$CONFLICTED_FILES"
+
+            UNEXPECTED_CONFLICT=0
+
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              file="$(normalize_path "$file")"
+
+              FOUND=0
+              OLDIFS="$IFS"
+              IFS=','
+
+              for excluded_path in $EXCLUDED; do
+                excluded_path="$(normalize_path "$excluded_path")"
+
+                if [ "$file" = "$excluded_path" ]; then
+                  FOUND=1
+                  break
+                fi
+              done
+
+              IFS="$OLDIFS"
+
+              if [ "$FOUND" -eq 1 ]; then
+                echo "Resolving excluded conflict: [$file]"
+              else
+                echo "Unexpected conflict: [$file]"
+                UNEXPECTED_CONFLICT=1
+              fi
+            done <<< "$CONFLICTED_FILES"
+
+            # --------------------------------------------------------
+            # Skip if any conflict is not explicitly excluded
+            # --------------------------------------------------------
+
+            if [ "$UNEXPECTED_CONFLICT" -eq 1 ]; then
+              echo "Skipping commit due to an unexpected conflict."
+
+              git cherry-pick --abort 2>/dev/null || true
+              git reset --hard HEAD
+
+              echo "$commit | unspecified conflict: $CONFLICTED_FILES" \
+                >> /tmp/skipped.log
+              continue
+            fi
+
+            # --------------------------------------------------------
+            # Resolve all excluded conflicts and restore ALL exclusions
+            # --------------------------------------------------------
+
+            restore_exclusions "$EXCLUDED"
+
+            # Stage the resolved result only after exclusions are restored.
+            git add -A
+
+            # --------------------------------------------------------
+            # Ensure there are no unresolved conflicts
+            # --------------------------------------------------------
+
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              echo "ERROR: Unresolved conflicts remain."
+
+              git cherry-pick --abort 2>/dev/null || true
+              git reset --hard HEAD
+
+              echo "$commit | unresolved conflicts remain" \
+                >> /tmp/skipped.log
+              continue
+            fi
+
+            # --------------------------------------------------------
+            # Verify every excluded path
+            # --------------------------------------------------------
+
+            if ! verify_exclusions "$EXCLUDED"; then
+              echo "ERROR: One or more excluded paths are still staged."
+
+              git cherry-pick --abort 2>/dev/null || true
+              git reset --hard HEAD
+
+              echo "$commit | excluded paths still staged after conflict resolution" \
+                >> /tmp/skipped.log
+              continue
+            fi
+
+            # --------------------------------------------------------
+            # Skip if no changes remain
+            # --------------------------------------------------------
+
+            if git diff --cached --quiet; then
+              echo "All changes were excluded."
+
+              git cherry-pick --abort 2>/dev/null || true
+              git reset --hard HEAD
+
+              echo "$commit | all changes were excluded" \
+                >> /tmp/skipped.log
+              continue
+            fi
+
+            # --------------------------------------------------------
+            # Create commit with the selected author
+            # --------------------------------------------------------
+
+            if create_commit; then
+              echo "MODIFIED: $commit"
+              echo "$commit | applied with exclusions: $EXCLUDED" \
+                >> /tmp/modified.log
+            else
+              git reset --hard HEAD
+              echo "$commit | failed to create modified commit" \
+                >> /tmp/skipped.log
+            fi
+          done
+
+      - name: Push
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          git push origin "$TARGET_BRANCH"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "# Cherry-pick result"
+            echo ""
+            echo "## Applied"
+
+            if [ -s /tmp/applied.log ]; then
+              sed 's/^/- /' /tmp/applied.log
+            else
+              echo "None"
+            fi
+
+            echo ""
+            echo "## Applied with exclusions"
+
+            if [ -s /tmp/modified.log ]; then
+              sed 's/^/- /' /tmp/modified.log
+            else
+              echo "None"
+            fi
+
+            echo ""
+            echo "## Skipped"
+
+            if [ -s /tmp/skipped.log ]; then
+              sed 's/^/- /' /tmp/skipped.log
+            else
+              echo "None"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
