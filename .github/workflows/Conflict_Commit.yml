@@ -21,7 +21,7 @@ on:
 
       commits:
         description: "Commit SHA — separated by spaces"
-        required: true
+        required: false
         type: string
 
       exclude_paths:
