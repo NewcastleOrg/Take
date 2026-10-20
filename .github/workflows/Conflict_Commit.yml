@@ -231,7 +231,7 @@ jobs:
           if [ -z "${COMMITS//[[:space:]]/}" ]; then
             echo "SHA not specified. Looking for new commits in the source branch..."
 
-            COMMITS="$(git rev-list --reverse --cherry-pick --right-only \
+            COMMITS="$(git rev-list --reverse --right-only \
               "origin/$TARGET_BRANCH...source/$SOURCE_BRANCH")"
 
             if [ -z "$COMMITS" ]; then
@@ -347,8 +347,18 @@ jobs:
             # Apply the commit without creating a commit yet
             # --------------------------------------------------------
 
-            if git cherry-pick --no-commit "$commit"; then
-              echo "Cherry-pick completed without conflicts."
+            CHERRY_PICK_ARGS=(--no-commit)
+
+              PARENT_COUNT="$(git rev-list --parents -n 1 "$commit" | awk '{print NF-1}')"
+
+              if [ "$PARENT_COUNT" -gt 1 ]; then
+                echo "Merge commit detected. Using first parent as mainline."
+                CHERRY_PICK_ARGS+=(-m 1)
+              fi
+
+              if git cherry-pick "${CHERRY_PICK_ARGS[@]}" "$commit"; then
+
+                echo "Cherry-pick completed without conflicts."
 
               # Restore every excluded path, including non-conflicting files.
               restore_exclusions "$EXCLUDED"
