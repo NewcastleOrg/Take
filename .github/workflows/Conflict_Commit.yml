@@ -92,6 +92,8 @@ jobs:
           USE_GITHUB_AUTHOR: ${{ inputs.use_github_author }}
           USE_GITHUB_COMMITTER: ${{ inputs.use_github_committer }}
           EXCLUDE_MARKDOWN: ${{ inputs.exclude_markdown }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
         shell: bash
         run: |
           set -o pipefail
@@ -225,6 +227,21 @@ jobs:
 
             return "$failed"
           }
+
+          if [ -z "${COMMITS//[[:space:]]/}" ]; then
+            echo "SHA not specified. Looking for new commits in the source branch..."
+
+            COMMITS="$(git rev-list --reverse --cherry-pick --right-only \
+              "origin/$TARGET_BRANCH...source/$SOURCE_BRANCH")"
+
+            if [ -z "$COMMITS" ]; then
+              echo "There are no new commits to rebase."
+              exit 0
+            fi
+
+            echo "Commits to migrate:"
+            printf '%s\n' "$COMMITS"
+          fi
 
           # ==========================================================
           # Process commits
