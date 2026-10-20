@@ -231,7 +231,7 @@ jobs:
           if [ -z "${COMMITS//[[:space:]]/}" ]; then
             echo "SHA not specified. Looking for new commits in the source branch..."
 
-            COMMITS="$(git rev-list --reverse --right-only \
+            COMMITS="$(git rev-list --first-parent --reverse --right-only \
               "origin/$TARGET_BRANCH...source/$SOURCE_BRANCH")"
 
             if [ -z "$COMMITS" ]; then
