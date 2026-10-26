@@ -11546,4 +11546,7 @@
     <string name="QRLoginStep3">Point your phone at this screen to confirm login</string>
     <string name="QRLoginButton">Log in by QR Code</string>
     <string name="QRLoginOrLoginByPhone">Or log in using your phone number</string>
+    <string name="VoipShareScreenTitle">Share screen</string>
+    <string name="VoipShareScreenAudio">Share the sound of the phone too</string>
+    <string name="VoipShareScreenAudioInfo">Enabling this option will allow you to broadcast audio from your device.</string>
 </resources>
