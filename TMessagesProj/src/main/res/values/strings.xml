@@ -11536,4 +11536,14 @@
     <string name="CreateManagedBotUsernameBotLimit">This bot already has a Premium username. Remove it before adding another.</string>
     <string name="CreateManagedBotUsernameSuffixMissing">The username must end in %1$s.</string>
     <string name="CreateManagedBotUsernameCheckFailed">Couldn\'t check this username. Please try again.</string>
+
+
+    <!--additional functions-->
+    <string name="QRLoginTitle">Log in by QR Code</string>
+    <string name="QRLoginSubtitle">Open Telegram on another device and scan this QR code to log in to your account.</string>
+    <string name="QRLoginStep1">Open Telegram on your phone</string>
+    <string name="QRLoginStep2">Go to **Settings** > **Devices** > **Link Desktop Device**</string>
+    <string name="QRLoginStep3">Point your phone at this screen to confirm login</string>
+    <string name="QRLoginButton">Log in by QR Code</string>
+    <string name="QRLoginOrLoginByPhone">Or log in using your phone number</string>
 </resources>
