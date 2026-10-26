@@ -11539,6 +11539,7 @@
 
 
     <!--additional functions-->
+    <string name="HideProxySponsorChannel">Hide proxy sponsor</string>
     <string name="QRLoginTitle">Log in by QR Code</string>
     <string name="QRLoginSubtitle">Open Telegram on another device and scan this QR code to log in to your account.</string>
     <string name="QRLoginStep1">Open Telegram on your phone</string>
