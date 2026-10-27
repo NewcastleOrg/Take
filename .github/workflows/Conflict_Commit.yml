@@ -21,7 +21,7 @@ on:
 
       commits:
         description: "Commit SHA — separated by spaces"
-        required: true
+        required: false
         type: string
 
       exclude_paths:
@@ -92,6 +92,8 @@ jobs:
           USE_GITHUB_AUTHOR: ${{ inputs.use_github_author }}
           USE_GITHUB_COMMITTER: ${{ inputs.use_github_committer }}
           EXCLUDE_MARKDOWN: ${{ inputs.exclude_markdown }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
         shell: bash
         run: |
           set -o pipefail
@@ -226,6 +228,21 @@ jobs:
             return "$failed"
           }
 
+          if [ -z "${COMMITS//[[:space:]]/}" ]; then
+            echo "SHA not specified. Looking for new commits in the source branch..."
+
+            COMMITS="$(git rev-list --reverse --right-only \
+              "origin/$TARGET_BRANCH...source/$SOURCE_BRANCH")"
+
+            if [ -z "$COMMITS" ]; then
+              echo "There are no new commits to rebase."
+              exit 0
+            fi
+
+            echo "Commits to migrate:"
+            printf '%s\n' "$COMMITS"
+          fi
+
           # ==========================================================
           # Process commits
           # ==========================================================
@@ -235,6 +252,8 @@ jobs:
             echo "========================================"
             echo "Processing: $commit"
             echo "========================================"
+            echo "Processing commit: $commit"
+            git rev-list --parents -n 1 "$commit"
 
             # --------------------------------------------------------
             # Make sure the source commit is available
@@ -330,8 +349,18 @@ jobs:
             # Apply the commit without creating a commit yet
             # --------------------------------------------------------
 
-            if git cherry-pick --no-commit "$commit"; then
-              echo "Cherry-pick completed without conflicts."
+            CHERRY_PICK_ARGS=(--no-commit)
+
+              PARENT_COUNT="$(git rev-list --parents -n 1 "$commit" | awk '{print NF-1}')"
+
+              if [ "$PARENT_COUNT" -gt 1 ]; then
+                echo "Merge commit detected. Using first parent as mainline."
+                CHERRY_PICK_ARGS+=(-m 1)
+              fi
+
+              if git cherry-pick "${CHERRY_PICK_ARGS[@]}" "$commit"; then
+
+                echo "Cherry-pick completed without conflicts."
 
               # Restore every excluded path, including non-conflicting files.
               restore_exclusions "$EXCLUDED"
