@@ -228,6 +228,25 @@ jobs:
             return "$failed"
           }
 
+          # ========================================================================
+          # Full history migration when no explicit SHA or exclusions are requested.
+          # ========================================================================
+          if [ -z "${COMMITS//[[:space:]]/}" ] &&
+            [ -z "${EXCLUDE_PATHS//[[:space:]]/}" ] &&
+            [ "$EXCLUDE_MARKDOWN" != "true" ]; then
+
+            SOURCE_REF="source/$SOURCE_BRANCH"
+
+            if git merge-base --is-ancestor HEAD "$SOURCE_REF"; then
+              git merge --ff-only "$SOURCE_REF"
+              echo "Full history migration completed: $(git rev-parse HEAD)"
+              exit 0
+            else
+              echo "::error::Full history migration is impossible: target and source histories have diverged."
+              exit 1
+            fi
+          fi
+
           if [ -z "${COMMITS//[[:space:]]/}" ]; then
             echo "SHA not specified. Looking for new commits in the source branch..."
 
