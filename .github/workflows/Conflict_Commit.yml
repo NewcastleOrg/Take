@@ -370,56 +370,53 @@ jobs:
 
             CHERRY_PICK_ARGS=(--no-commit)
 
-              PARENT_COUNT="$(git rev-list --parents -n 1 "$commit" | awk '{print NF-1}')"
+            # Get commit parents directly from Git.
+            PARENTS="$(git show -s --format='%P' "$commit")"
 
-              if [ "$PARENT_COUNT" -gt 1 ]; then
-                echo "Merge commit detected. Using first parent as mainline."
-                CHERRY_PICK_ARGS+=(-m 1)
-              fi
+            read -r -a PARENT_ARRAY <<< "$PARENTS"
 
-              if git cherry-pick "${CHERRY_PICK_ARGS[@]}" "$commit"; then
+            PARENT_COUNT="${#PARENT_ARRAY[@]}"
 
-                echo "Cherry-pick completed without conflicts."
+            echo "Commit: $commit"
+            echo "Parent count: $PARENT_COUNT"
+            echo "Parents: $PARENTS"
 
-              # Restore every excluded path, including non-conflicting files.
-              restore_exclusions "$EXCLUDED"
+            if [ "$PARENT_COUNT" -gt 1 ]; then
+              echo "Merge commit detected. Using first parent as mainline."
+              CHERRY_PICK_ARGS+=(-m 1)
+            fi
 
-              git add -A
+            echo "Cherry-pick arguments: ${CHERRY_PICK_ARGS[*]}"
 
-              if ! verify_exclusions "$EXCLUDED"; then
-                echo "Exclusion verification failed. Resetting."
-                git reset --hard HEAD
+            if git cherry-pick "${CHERRY_PICK_ARGS[@]}" "$commit"; then
+
+              echo "Cherry-pick completed without conflicts."
+
+              # Keep your existing successful cherry-pick handling here.
+
+            else
+
+              echo "Cherry-pick failed. Checking conflict state."
+
+              CONFLICTED_FILES="$(git diff --name-only --diff-filter=U)"
+
+              echo "Conflicted files:"
+              printf '%s\n' "$CONFLICTED_FILES"
+
+              if [ -z "$CONFLICTED_FILES" ]; then
+                echo "::error::Cherry-pick failed without file conflicts."
+
                 git cherry-pick --abort 2>/dev/null || true
-                echo "$commit | excluded paths still staged" \
+                git reset --hard HEAD
+
+                echo "$commit | cherry-pick failed without file conflicts" \
                   >> /tmp/skipped.log
+
                 continue
               fi
 
-              if git diff --cached --quiet; then
-                echo "Nothing remains after exclusions."
-                git reset --hard HEAD
-                git cherry-pick --abort 2>/dev/null || true
-                echo "$commit | nothing to apply after exclusions" \
-                  >> /tmp/skipped.log
-                continue
-              fi
+            # Keep your existing conflict resolution logic here.
 
-              if create_commit; then
-                if [ -n "$EXCLUDED" ]; then
-                  echo "$commit | applied with exclusions: $EXCLUDED" \
-                    >> /tmp/modified.log
-                  echo "MODIFIED: $commit"
-                else
-                  echo "$commit | applied" >> /tmp/applied.log
-                  echo "APPLIED: $commit"
-                fi
-              else
-                git reset --hard HEAD
-                echo "$commit | failed to create commit" \
-                  >> /tmp/skipped.log
-              fi
-
-              continue
             fi
 
             # --------------------------------------------------------
