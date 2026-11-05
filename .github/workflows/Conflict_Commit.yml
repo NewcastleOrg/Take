@@ -392,31 +392,81 @@ jobs:
 
               echo "Cherry-pick completed without conflicts."
 
-              # Keep your existing successful cherry-pick handling here.
+              # Restore excluded paths.
+              restore_exclusions "$EXCLUDED"
 
-            else
+              git add -A
 
-              echo "Cherry-pick failed. Checking conflict state."
+              if ! verify_exclusions "$EXCLUDED"; then
+                echo "Exclusion verification failed. Resetting."
 
-              CONFLICTED_FILES="$(git diff --name-only --diff-filter=U)"
-
-              echo "Conflicted files:"
-              printf '%s\n' "$CONFLICTED_FILES"
-
-              if [ -z "$CONFLICTED_FILES" ]; then
-                echo "::error::Cherry-pick failed without file conflicts."
-
-                git cherry-pick --abort 2>/dev/null || true
                 git reset --hard HEAD
 
-                echo "$commit | cherry-pick failed without file conflicts" \
+                echo "$commit | excluded paths still staged" \
                   >> /tmp/skipped.log
 
                 continue
               fi
 
-            # Keep your existing conflict resolution logic here.
+              if git diff --cached --quiet; then
+                echo "Nothing remains after exclusions."
 
+                git reset --hard HEAD
+
+                echo "$commit | nothing to apply after exclusions" \
+                  >> /tmp/skipped.log
+
+                continue
+              fi
+
+              if create_commit; then
+                if [ -n "$EXCLUDED" ]; then
+                  echo "$commit | applied with exclusions: $EXCLUDED" \
+                    >> /tmp/modified.log
+
+                  echo "MODIFIED: $commit"
+                else
+                  echo "$commit | applied" >> /tmp/applied.log
+
+                  echo "APPLIED: $commit"
+                fi
+              else
+                git reset --hard HEAD
+
+                echo "$commit | failed to create commit" \
+                  >> /tmp/skipped.log
+              fi
+
+              # IMPORTANT: Do not enter conflict handling.
+              continue
+
+            fi
+
+            # --------------------------------------------------------
+            # Cherry-pick failed: handle actual conflicts
+            # --------------------------------------------------------
+
+            echo "Cherry-pick failed. Checking conflict state."
+
+            CONFLICTED_FILES="$(git diff --name-only --diff-filter=U)"
+
+            echo "Conflicted files:"
+            printf '%s\n' "$CONFLICTED_FILES"
+
+            if [ -z "$CONFLICTED_FILES" ]; then
+              echo "::error::Cherry-pick failed without file conflicts."
+
+              git cherry-pick --abort 2>/dev/null || true
+              git reset --hard HEAD
+
+              echo "$commit | cherry-pick failed without file conflicts" \
+                >> /tmp/skipped.log
+
+              continue
+            fi
+
+            # Continue with your existing conflict resolution logic.
+            
             fi
 
             # --------------------------------------------------------
