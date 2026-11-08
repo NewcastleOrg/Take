@@ -244,10 +244,32 @@ jobs:
             SOURCE_REF="source/$SOURCE_BRANCH"
 
             if git merge-base --is-ancestor HEAD "$SOURCE_REF"; then
+
+              echo "Starting full history migration..."
+
+              # Save current HEAD before migration
+              OLD_HEAD="$(git rev-parse HEAD)"
+
+              # Collect all commits that will be migrated
+              MIGRATED_COMMITS="$(git rev-list --reverse "$OLD_HEAD..$SOURCE_REF")"
+
+              # Perform full history migration
               git merge --ff-only "$SOURCE_REF"
+
+              # Record migrated commits in summary
+              if [ -n "$MIGRATED_COMMITS" ]; then
+                while IFS= read -r commit; do
+                  [ -z "$commit" ] && continue
+
+                  echo "$commit | applied (full history migration)" \
+                    >> /tmp/applied.log
+
+                done <<< "$MIGRATED_COMMITS"
+              fi
 
               echo "Full history migration completed: $(git rev-parse HEAD)"
               exit 0
+
             else
               echo "::error::Full history migration is impossible: target and source histories have diverged."
               exit 1
