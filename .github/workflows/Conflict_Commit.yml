@@ -34,11 +34,12 @@ on:
         required: false
         type: boolean
         default: false
+
       use_github_committer:
-          description: "Use GitHub Actions as committer"
-          required: false
-          type: boolean
-          default: true
+        description: "Use GitHub Actions as committer"
+        required: false
+        type: boolean
+        default: true
 
       exclude_markdown:
         description: "Always exclude all .md files"
@@ -111,6 +112,7 @@ jobs:
 
             printf '%s' "$path"
           }
+
           add_markdown_exclusions() {
             local excluded="$1"
             local file
@@ -134,6 +136,7 @@ jobs:
 
             printf '%s' "$excluded"
           }
+
           # ==========================================================
           # Create a commit using the selected author
           # ==========================================================
@@ -195,6 +198,7 @@ jobs:
                 rm -f -- "$path" || true
               fi
             done
+
             IFS="$old_ifs"
           }
 
@@ -223,14 +227,16 @@ jobs:
                 echo "Verified excluded path: [$path]"
               fi
             done
+
             IFS="$old_ifs"
 
             return "$failed"
           }
 
-          # ========================================================================
-          # Full history migration when no explicit SHA or exclusions are requested.
-          # ========================================================================
+          # ==========================================================
+          # Full history migration
+          # ==========================================================
+
           if [ -z "${COMMITS//[[:space:]]/}" ] &&
             [ -z "${EXCLUDE_PATHS//[[:space:]]/}" ] &&
             [ "$EXCLUDE_MARKDOWN" != "true" ]; then
@@ -239,6 +245,7 @@ jobs:
 
             if git merge-base --is-ancestor HEAD "$SOURCE_REF"; then
               git merge --ff-only "$SOURCE_REF"
+
               echo "Full history migration completed: $(git rev-parse HEAD)"
               exit 0
             else
@@ -246,6 +253,10 @@ jobs:
               exit 1
             fi
           fi
+
+          # ==========================================================
+          # Automatically discover commits
+          # ==========================================================
 
           if [ -z "${COMMITS//[[:space:]]/}" ]; then
             echo "SHA not specified. Looking for new commits in the source branch..."
@@ -267,10 +278,12 @@ jobs:
           # ==========================================================
 
           for commit in $COMMITS; do
+
             echo ""
             echo "========================================"
             echo "Processing: $commit"
             echo "========================================"
+
             echo "Processing commit: $commit"
             git rev-list --parents -n 1 "$commit"
 
@@ -280,18 +293,20 @@ jobs:
 
             if ! git cat-file -e "$commit^{commit}" 2>/dev/null; then
               echo "Commit is not available locally. Fetching..."
+
               git fetch source "$commit" 2>/dev/null || true
 
               if ! git cat-file -e "$commit^{commit}" 2>/dev/null; then
                 echo "$commit | commit not found or cannot be fetched" \
                   >> /tmp/skipped.log
+
                 echo "SKIPPED: $commit"
                 continue
               fi
             fi
 
             # --------------------------------------------------------
-            # Preserve original commit metadata before cherry-pick
+            # Preserve original commit metadata
             # --------------------------------------------------------
 
             ORIGINAL_AUTHOR_NAME="$(git log -1 --format='%an' "$commit")"
@@ -318,6 +333,7 @@ jobs:
                 break
               fi
             done
+
             CURRENT_COMMIT="$commit"
             EXCLUDED="$(add_markdown_exclusions "$EXCLUDED")"
 
@@ -353,24 +369,26 @@ jobs:
             EXCLUDED="$NORMALIZED_EXCLUDED"
 
             echo "Final normalized exclusions:"
+
             if [ -n "$EXCLUDED" ]; then
               OLDIFS="$IFS"
               IFS=','
+
               for path in $EXCLUDED; do
                 printf '  [%s]\n' "$path"
               done
+
               IFS="$OLDIFS"
             else
               echo "  None"
             fi
 
             # --------------------------------------------------------
-            # Apply the commit without creating a commit yet
+            # Detect merge commit and prepare cherry-pick
             # --------------------------------------------------------
 
             CHERRY_PICK_ARGS=(--no-commit)
 
-            # Get commit parents directly from Git.
             PARENTS="$(git show -s --format='%P' "$commit")"
 
             read -r -a PARENT_ARRAY <<< "$PARENTS"
@@ -388,11 +406,18 @@ jobs:
 
             echo "Cherry-pick arguments: ${CHERRY_PICK_ARGS[*]}"
 
+            # ========================================================
+            # Apply commit
+            # ========================================================
+
             if git cherry-pick "${CHERRY_PICK_ARGS[@]}" "$commit"; then
+
+              # ======================================================
+              # SUCCESSFUL CHERRY-PICK
+              # ======================================================
 
               echo "Cherry-pick completed without conflicts."
 
-              # Restore excluded paths.
               restore_exclusions "$EXCLUDED"
 
               git add -A
@@ -408,18 +433,44 @@ jobs:
                 continue
               fi
 
+              # ------------------------------------------------------
+              # Check whether changes remain
+              # ------------------------------------------------------
+
               if git diff --cached --quiet; then
-                echo "Nothing remains after exclusions."
+
+                if [ -n "$EXCLUDED" ]; then
+                  echo "No staged changes remain after applying exclusions."
+
+                  echo "$commit | no changes after exclusions: $EXCLUDED" \
+                    >> /tmp/skipped.log
+
+                elif [ "$PARENT_COUNT" -gt 1 ] &&
+                  git diff --quiet "$commit^1" "$commit"; then
+
+                  echo "Merge commit is empty relative to first parent."
+
+                  echo "$commit | empty merge commit" \
+                    >> /tmp/skipped.log
+
+                else
+                  echo "No net changes on target branch."
+
+                  echo "$commit | no net changes after cherry-pick; changes may already exist or be equivalent" \
+                    >> /tmp/skipped.log
+                fi
 
                 git reset --hard HEAD
-
-                echo "$commit | nothing to apply after exclusions" \
-                  >> /tmp/skipped.log
 
                 continue
               fi
 
+              # ------------------------------------------------------
+              # Create commit
+              # ------------------------------------------------------
+
               if create_commit; then
+
                 if [ -n "$EXCLUDED" ]; then
                   echo "$commit | applied with exclusions: $EXCLUDED" \
                     >> /tmp/modified.log
@@ -430,6 +481,7 @@ jobs:
 
                   echo "APPLIED: $commit"
                 fi
+
               else
                 git reset --hard HEAD
 
@@ -437,178 +489,186 @@ jobs:
                   >> /tmp/skipped.log
               fi
 
-              # IMPORTANT: Do not enter conflict handling.
               continue
 
-            # --------------------------------------------------------
-            # Cherry-pick failed: handle actual conflicts
-            # --------------------------------------------------------
-          else
-
-            echo "Cherry-pick failed. Checking conflict state."
-
-            CONFLICTED_FILES="$(git diff --name-only --diff-filter=U)"
-
-            echo "Conflicted files:"
-            printf '%s\n' "$CONFLICTED_FILES"
-
-            if [ -z "$CONFLICTED_FILES" ]; then
-              echo "::error::Cherry-pick failed without file conflicts."
-
-              git cherry-pick --abort 2>/dev/null || true
-              git reset --hard HEAD
-
-              echo "$commit | cherry-pick failed without file conflicts" \
-                >> /tmp/skipped.log
-
-              continue
-
-            # Continue with your existing conflict resolution logic.
-            
-            fi
-
-            # --------------------------------------------------------
-            # Cherry-pick has conflicts
-            # --------------------------------------------------------
-
-            echo "Conflict detected."
-
-            CONFLICTED_FILES="$(git diff --name-only --diff-filter=U)"
-            echo "Conflicted files:"
-            printf '%s\n' "$CONFLICTED_FILES"
-
-            UNEXPECTED_CONFLICT=0
-
-            while IFS= read -r file; do
-              [ -z "$file" ] && continue
-              file="$(normalize_path "$file")"
-
-              FOUND=0
-              OLDIFS="$IFS"
-              IFS=','
-
-              for excluded_path in $EXCLUDED; do
-                excluded_path="$(normalize_path "$excluded_path")"
-
-                if [ "$file" = "$excluded_path" ]; then
-                  FOUND=1
-                  break
-                fi
-              done
-
-              IFS="$OLDIFS"
-
-              if [ "$FOUND" -eq 1 ]; then
-                echo "Resolving excluded conflict: [$file]"
-              else
-                echo "Unexpected conflict: [$file]"
-                UNEXPECTED_CONFLICT=1
-              fi
-            done <<< "$CONFLICTED_FILES"
-
-            # --------------------------------------------------------
-            # Skip if any conflict is not explicitly excluded
-            # --------------------------------------------------------
-
-            if [ "$UNEXPECTED_CONFLICT" -eq 1 ]; then
-              echo "Skipping commit due to an unexpected conflict."
-
-              git cherry-pick --abort 2>/dev/null || true
-              git reset --hard HEAD
-
-              echo "$commit | unspecified conflict: $CONFLICTED_FILES" \
-                >> /tmp/skipped.log
-              continue
-            fi
-
-            # --------------------------------------------------------
-            # Resolve all excluded conflicts and restore ALL exclusions
-            # --------------------------------------------------------
-
-            restore_exclusions "$EXCLUDED"
-
-            # Stage the resolved result only after exclusions are restored.
-            git add -A
-
-            # --------------------------------------------------------
-            # Ensure there are no unresolved conflicts
-            # --------------------------------------------------------
-
-            if git diff --name-only --diff-filter=U | grep -q .; then
-              echo "ERROR: Unresolved conflicts remain."
-
-              git cherry-pick --abort 2>/dev/null || true
-              git reset --hard HEAD
-
-              echo "$commit | unresolved conflicts remain" \
-                >> /tmp/skipped.log
-              continue
-            fi
-
-            # --------------------------------------------------------
-            # Verify every excluded path
-            # --------------------------------------------------------
-
-            if ! verify_exclusions "$EXCLUDED"; then
-              echo "ERROR: One or more excluded paths are still staged."
-
-              git cherry-pick --abort 2>/dev/null || true
-              git reset --hard HEAD
-
-              echo "$commit | excluded paths still staged after conflict resolution" \
-                >> /tmp/skipped.log
-              continue
-            fi
-
-            # --------------------------------------------------------
-            # Skip if no changes remain
-            # --------------------------------------------------------
-
-            
-            if git diff --cached --quiet; then
-
-              if [ -n "$EXCLUDED" ]; then
-
-                echo "No staged changes remain after applying exclusions."
-
-                echo "$commit | no changes after exclusions: $EXCLUDED" \
-                  >> /tmp/skipped.log
-
-              elif [ "$PARENT_COUNT" -gt 1 ] && git diff --quiet "$commit^1" "$commit"; then
-
-                echo "Merge commit is empty relative to first parent."
-
-                echo "$commit | empty merge commit" \
-                  >> /tmp/skipped.log
-
-              else
-
-                echo "No net changes on target branch."
-
-                echo "$commit | no net changes after cherry-pick; changes may already exist or be equivalent" \
-                  >> /tmp/skipped.log
-
-              fi
-
-              git reset --hard HEAD
-
-              continue
-
-            fi
-
-            # --------------------------------------------------------
-            # Create commit with the selected author
-            # --------------------------------------------------------
-
-            if create_commit; then
-              echo "MODIFIED: $commit"
-              echo "$commit | applied with exclusions: $EXCLUDED" \
-                >> /tmp/modified.log
             else
-              git reset --hard HEAD
-              echo "$commit | failed to create modified commit" \
-                >> /tmp/skipped.log
+
+              # ======================================================
+              # FAILED CHERRY-PICK / CONFLICT HANDLING
+              # ======================================================
+
+              echo "Cherry-pick failed. Checking conflict state."
+
+              CONFLICTED_FILES="$(git diff --name-only --diff-filter=U)"
+
+              echo "Conflicted files:"
+              printf '%s\n' "$CONFLICTED_FILES"
+
+              # ------------------------------------------------------
+              # Failure without file conflicts
+              # ------------------------------------------------------
+
+              if [ -z "$CONFLICTED_FILES" ]; then
+
+                echo "::error::Cherry-pick failed without file conflicts."
+
+                git cherry-pick --abort 2>/dev/null || true
+                git reset --hard HEAD
+
+                echo "$commit | cherry-pick failed without file conflicts" \
+                  >> /tmp/skipped.log
+
+                continue
+              fi
+
+              # ------------------------------------------------------
+              # Check whether conflicts are explicitly excluded
+              # ------------------------------------------------------
+
+              echo "Conflict detected."
+
+              UNEXPECTED_CONFLICT=0
+
+              while IFS= read -r file; do
+                [ -z "$file" ] && continue
+
+                file="$(normalize_path "$file")"
+
+                FOUND=0
+                OLDIFS="$IFS"
+                IFS=','
+
+                for excluded_path in $EXCLUDED; do
+                  excluded_path="$(normalize_path "$excluded_path")"
+
+                  if [ "$file" = "$excluded_path" ]; then
+                    FOUND=1
+                    break
+                  fi
+                done
+
+                IFS="$OLDIFS"
+
+                if [ "$FOUND" -eq 1 ]; then
+                  echo "Resolving excluded conflict: [$file]"
+                else
+                  echo "Unexpected conflict: [$file]"
+                  UNEXPECTED_CONFLICT=1
+                fi
+
+              done <<< "$CONFLICTED_FILES"
+
+              # ------------------------------------------------------
+              # Skip unexpected conflicts
+              # ------------------------------------------------------
+
+              if [ "$UNEXPECTED_CONFLICT" -eq 1 ]; then
+
+                echo "Skipping commit due to an unexpected conflict."
+
+                git cherry-pick --abort 2>/dev/null || true
+                git reset --hard HEAD
+
+                echo "$commit | unspecified conflict: $CONFLICTED_FILES" \
+                  >> /tmp/skipped.log
+
+                continue
+              fi
+
+              # ------------------------------------------------------
+              # Resolve excluded conflicts
+              # ------------------------------------------------------
+
+              restore_exclusions "$EXCLUDED"
+
+              git add -A
+
+              # ------------------------------------------------------
+              # Ensure no unresolved conflicts remain
+              # ------------------------------------------------------
+
+              if git diff --name-only --diff-filter=U | grep -q .; then
+
+                echo "ERROR: Unresolved conflicts remain."
+
+                git cherry-pick --abort 2>/dev/null || true
+                git reset --hard HEAD
+
+                echo "$commit | unresolved conflicts remain" \
+                  >> /tmp/skipped.log
+
+                continue
+              fi
+
+              # ------------------------------------------------------
+              # Verify exclusions
+              # ------------------------------------------------------
+
+              if ! verify_exclusions "$EXCLUDED"; then
+
+                echo "ERROR: One or more excluded paths are still staged."
+
+                git cherry-pick --abort 2>/dev/null || true
+                git reset --hard HEAD
+
+                echo "$commit | excluded paths still staged after conflict resolution" \
+                  >> /tmp/skipped.log
+
+                continue
+              fi
+
+              # ------------------------------------------------------
+              # Check whether changes remain after conflict resolution
+              # ------------------------------------------------------
+
+              if git diff --cached --quiet; then
+
+                if [ -n "$EXCLUDED" ]; then
+                  echo "No staged changes remain after applying exclusions."
+
+                  echo "$commit | no changes after exclusions: $EXCLUDED" \
+                    >> /tmp/skipped.log
+
+                elif [ "$PARENT_COUNT" -gt 1 ] &&
+                  git diff --quiet "$commit^1" "$commit"; then
+
+                  echo "Merge commit is empty relative to first parent."
+
+                  echo "$commit | empty merge commit" \
+                    >> /tmp/skipped.log
+
+                else
+                  echo "No net changes on target branch."
+
+                  echo "$commit | no net changes after cherry-pick; changes may already exist or be equivalent" \
+                    >> /tmp/skipped.log
+                fi
+
+                git reset --hard HEAD
+
+                continue
+              fi
+
+              # ------------------------------------------------------
+              # Create commit after conflict resolution
+              # ------------------------------------------------------
+
+              if create_commit; then
+
+                echo "MODIFIED: $commit"
+
+                echo "$commit | applied with exclusions: $EXCLUDED" \
+                  >> /tmp/modified.log
+
+              else
+                git reset --hard HEAD
+
+                echo "$commit | failed to create modified commit" \
+                  >> /tmp/skipped.log
+              fi
+
             fi
+
           done
 
       - name: Push
@@ -649,4 +709,5 @@ jobs:
             else
               echo "None"
             fi
+
           } >> "$GITHUB_STEP_SUMMARY"
