@@ -443,6 +443,7 @@ jobs:
             # --------------------------------------------------------
             # Cherry-pick failed: handle actual conflicts
             # --------------------------------------------------------
+          else
 
             echo "Cherry-pick failed. Checking conflict state."
 
@@ -461,7 +462,6 @@ jobs:
                 >> /tmp/skipped.log
 
               continue
-            fi
 
             # Continue with your existing conflict resolution logic.
             
@@ -564,15 +564,36 @@ jobs:
             # Skip if no changes remain
             # --------------------------------------------------------
 
+            
             if git diff --cached --quiet; then
-              echo "All changes were excluded."
 
-              git cherry-pick --abort 2>/dev/null || true
+              if [ -n "$EXCLUDED" ]; then
+
+                echo "No staged changes remain after applying exclusions."
+
+                echo "$commit | no changes after exclusions: $EXCLUDED" \
+                  >> /tmp/skipped.log
+
+              elif [ "$PARENT_COUNT" -gt 1 ] && git diff --quiet "$commit^1" "$commit"; then
+
+                echo "Merge commit is empty relative to first parent."
+
+                echo "$commit | empty merge commit" \
+                  >> /tmp/skipped.log
+
+              else
+
+                echo "No net changes on target branch."
+
+                echo "$commit | no net changes after cherry-pick; changes may already exist or be equivalent" \
+                  >> /tmp/skipped.log
+
+              fi
+
               git reset --hard HEAD
 
-              echo "$commit | all changes were excluded" \
-                >> /tmp/skipped.log
               continue
+
             fi
 
             # --------------------------------------------------------
