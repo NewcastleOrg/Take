@@ -266,6 +266,7 @@
 
 
     <!--additional functions-->
+    <string name="HideProxySponsorChannel">Скрыть спонсора прокси</string>
     <string name="QRLoginButton">Войти по QR-коду</string>
     <string name="QRLoginOrLoginByPhone">Или войдите по номеру телефона</string>
     <string name="QRLoginStep1">Откройте Telegram на телефоне</string>
