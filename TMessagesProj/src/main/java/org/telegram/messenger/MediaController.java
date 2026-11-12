@@ -1181,6 +1181,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private MessageObject recordReplyingTopMsg;
     private TL_stories.StoryItem recordReplyingStory;
     private SendMessageChatArguments recordSendMessageChatArguments;
+    private ChatActivity.ReplyQuote recordReplyingQuote;
     public short[] recordSamples = new short[1024];
     public long samplesCount;
 
@@ -2404,7 +2405,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         if (recordingAudio != null) {
             toggleRecordingPause(false);
         } else if (raised) {
-            startRecording(raiseChat.getCurrentAccount(), raiseChat.getDialogId(), null, raiseChat.getThreadMessage(), null, raiseChat.getClassGuid(), false, raiseChat != null ? raiseChat.getMessageChatSendParams() : null, raiseChat != null ? raiseChat.getSendMonoForumPeerId(): 0, raiseChat != null ? raiseChat.getSendMessageSuggestionParams(): null);
+            startRecording(raiseChat.getCurrentAccount(), raiseChat.getDialogId(), null, raiseChat.getThreadMessage(), null, null, raiseChat.getClassGuid(), false, raiseChat != null ? raiseChat.getMessageChatSendParams() : null, raiseChat != null ? raiseChat.getSendMonoForumPeerId(): 0, raiseChat != null ? raiseChat.getSendMessageSuggestionParams(): null);
         } else {
             stopRecording(2, false, 0, false, 0);
         }
@@ -2426,7 +2427,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             return;
         }
         raiseToEarRecord = true;
-        startRecording(raiseChat.getCurrentAccount(), raiseChat.getDialogId(), null, raiseChat.getThreadMessage(), null, raiseChat.getClassGuid(), false, raiseChat != null ? raiseChat.getMessageChatSendParams() : null, raiseChat != null ? raiseChat.getSendMonoForumPeerId(): 0, raiseChat != null ? raiseChat.getSendMessageSuggestionParams(): null);
+        startRecording(raiseChat.getCurrentAccount(), raiseChat.getDialogId(), null, raiseChat.getThreadMessage(), null, null, raiseChat.getClassGuid(), false, raiseChat != null ? raiseChat.getMessageChatSendParams() : null, raiseChat != null ? raiseChat.getSendMonoForumPeerId(): 0, raiseChat != null ? raiseChat.getSendMessageSuggestionParams(): null);
         ignoreOnPause = true;
     }
 
@@ -4566,10 +4567,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         return downloadingCurrentMessage;
     }
 
-    public void setReplyingMessage(MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem storyItem) {
+    public void setReplyingMessage(MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem storyItem, ChatActivity.ReplyQuote replyQuote) {
         recordReplyingMsg = replyToMsg;
         recordReplyingTopMsg = replyToTopMsg;
         recordReplyingStory = storyItem;
+        recordReplyingQuote = replyQuote;
     }
 
     public void requestRecordAudioFocus(boolean request) {
@@ -4600,6 +4602,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             MessageObject replyToMsg,
             MessageObject replyToTopMsg,
             TL_stories.StoryItem replyStory,
+            ChatActivity.ReplyQuote replyQuote,
             int guid,
             boolean paused,
             SendMessageChatArguments sendMessageChatArguments,
@@ -4621,6 +4624,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         recordReplyingTopMsg = replyToTopMsg;
         recordReplyingStory = replyStory;
         recordSendMessageChatArguments = sendMessageChatArguments;
+        recordReplyingQuote = replyQuote;
         recordingPrevAudioFile = null;
         recordingAudioFile = null;
         recordTimeCount = 0L;
@@ -4827,6 +4831,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             params.suggestionParams = recordMonoForumSuggestionParams;
             params.replyToStoryItem = recordReplyingStory;
             params.sendMessageChatArguments = recordSendMessageChatArguments;
+            params.replyQuote = recordReplyingQuote;
             params.payStars = sendAfterDonePayStars;
             SendMessagesHelper.getInstance(recordingCurrentAccount).sendMessage(params);
         }
@@ -4986,6 +4991,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             MessageObject replyToMsg,
             MessageObject replyToTopMsg,
             TL_stories.StoryItem replyStory,
+            ChatActivity.ReplyQuote replyQuote,
             int guid,
             SendMessageChatArguments sendMessageChatArguments,
             long monoForumPeerId,
@@ -5003,6 +5009,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         recordReplyingMsg = replyToMsg;
         recordReplyingTopMsg = replyToTopMsg;
         recordReplyingStory = replyStory;
+        recordReplyingQuote = replyQuote;
         recordSendMessageChatArguments = sendMessageChatArguments;
         recordMonoForumPeerId = monoForumPeerId;
         recordMonoForumSuggestionParams = suggestionParams;
@@ -5011,10 +5018,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         return true;
     }
 
-    public void prepareResumedRecording(int currentAccount, MediaDataController.DraftVoice draft, long dialogId, MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem replyStory, int guid, SendMessageChatArguments sendMessageChatArguments, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+    public void prepareResumedRecording(int currentAccount, MediaDataController.DraftVoice draft, long dialogId, MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem replyStory, ChatActivity.ReplyQuote replyQuote, int guid, SendMessageChatArguments sendMessageChatArguments, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
         if (audioRecorderV2Active) {
             // A paused V2 recording outlives the chat pause; show it again instead of rebuilding it.
-            if (showAudioRecorderV2Draft(draft, replyToMsg, replyToTopMsg, replyStory, guid, sendMessageChatArguments, monoForumPeerId, suggestionParams)
+            if (showAudioRecorderV2Draft(draft, replyToMsg, replyToTopMsg, replyStory, replyQuote, guid, sendMessageChatArguments, monoForumPeerId, suggestionParams)
                     || !releaseAudioRecorderV2ForNewRecording()) {
                 return;
             }
@@ -5059,7 +5066,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 recordReplyingMsg = replyToMsg;
                 recordReplyingTopMsg = replyToTopMsg;
                 recordReplyingStory = replyStory;
-                recordSendMessageChatArguments = recordSendMessageChatArguments;
+                recordSendMessageChatArguments = sendMessageChatArguments;
+                recordReplyingQuote = replyQuote;
             } catch (Exception e) {
                 FileLog.e(e);
                 recordingAudio = null;
@@ -5291,7 +5299,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         });
     }
 
-    public void startRecording(int currentAccount, long dialogId, MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem replyStory, int guid, boolean manual, SendMessageChatArguments sendMessageChatArguments, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+    public void startRecording(int currentAccount, long dialogId, MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem replyStory, ChatActivity.ReplyQuote replyQuote, int guid, boolean manual, SendMessageChatArguments sendMessageChatArguments, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
         boolean paused = false;
         if (playingMessageObject != null && isPlayingMessage(playingMessageObject) && !isMessagePaused()) {
             paused = true;
@@ -5315,6 +5323,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     replyToMsg,
                     replyToTopMsg,
                     replyStory,
+                    replyQuote,
                     guid,
                     paused,
                     sendMessageChatArguments,
@@ -5393,6 +5402,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 recordReplyingTopMsg = replyToTopMsg;
                 recordReplyingStory = replyStory;
                 recordSendMessageChatArguments = sendMessageChatArguments;
+                recordReplyingQuote = replyQuote;
                 fileBuffer.rewind();
 
                 audioRecorder.startRecording();
@@ -5556,6 +5566,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                             params.suggestionParams = recordMonoForumSuggestionParams;
                             params.replyToStoryItem = recordReplyingStory;
                             params.sendMessageChatArguments = recordSendMessageChatArguments;
+                            params.replyQuote = recordReplyingQuote;
                             params.payStars = payStars;
                             SendMessagesHelper.getInstance(recordingCurrentAccount).sendMessage(params);
                         }
