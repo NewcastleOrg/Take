@@ -940,7 +940,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         return delegate != null ? delegate.getDraftMessageMeasureController() : null;
     }
 
-    private final static int DOCUMENT_ATTACH_TYPE_NONE = 0;
+    final static int DOCUMENT_ATTACH_TYPE_NONE = 0;
     final static int DOCUMENT_ATTACH_TYPE_DOCUMENT = 1;
     final static int DOCUMENT_ATTACH_TYPE_GIF = 2;
     final static int DOCUMENT_ATTACH_TYPE_AUDIO = 3;
