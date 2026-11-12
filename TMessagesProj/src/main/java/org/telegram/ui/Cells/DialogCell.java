@@ -661,7 +661,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private int countWidthOld;
     private int countLeftOld;
     private boolean countAnimationIncrement;
-    private BoolAnimator animatorPollVotesMentionVisible = new BoolAnimator(this, CubicBezierInterpolator.EASE_OUT_QUINT, 320);
+    private BoolAnimator animatorPollVotesMentionVisible;
     private ValueAnimator countAnimator;
     private ValueAnimator reactionsMentionsAnimator;
     private float countChangeProgress = 1f;
@@ -3717,7 +3717,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 countAnimator.start();
             }
 
-            animatorPollVotesMentionVisible.setValue(pollVotesMentionCount != 0, animated);
+            if (pollVotesMentionCount != 0 || animatorPollVotesMentionVisible != null) {
+                if (animatorPollVotesMentionVisible == null) {
+                    animatorPollVotesMentionVisible = new BoolAnimator(this, CubicBezierInterpolator.EASE_OUT_QUINT, 320);
+                }
+                animatorPollVotesMentionVisible.setValue(pollVotesMentionCount != 0, animated);
+            }
             boolean newHasReactionsMentions = reactionMentionCount != 0;
             if (animated && (newHasReactionsMentions != oldHasReactionsMentions)) {
                 if (reactionsMentionsAnimator != null) {
@@ -4600,7 +4605,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 setDrawableBounds(Theme.dialogs_reorderDrawable, pinLeft, pinTop);
                 Theme.dialogs_reorderDrawable.draw(canvas);
             }
-            final float pollVotesMentionsVisibility = animatorPollVotesMentionVisible.getFloatValue();
+            final float pollVotesMentionsVisibility = animatorPollVotesMentionVisible != null ? animatorPollVotesMentionVisible.getFloatValue() : 0;
             if (drawError) {
                 Theme.dialogs_errorDrawable.setAlpha((int) ((1.0f - reorderIconProgress) * 255));
                 rect.set(errorLeft, errorTop, errorLeft + dp(BADGE_SIZE), errorTop + dp(BADGE_SIZE));
