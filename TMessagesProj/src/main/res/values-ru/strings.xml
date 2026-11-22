@@ -277,4 +277,5 @@
     <string name="VoipShareScreenTitle">Транслировать экран</string>
     <string name="VoipShareScreenAudio">Транслировать звук устройства</string>
     <string name="VoipShareScreenAudioInfo">Включение этой опции позволит вам транслировать вместе с экраном ещё и звук вашего устройства.</string>
+    <string name="PasskeyGoogleManagerInfo">Менеджер паролей Google не принимает passkey из этого приложения. Выберите другой менеджер паролей, например Bitwarden или KeePassDX.</string>
 </resources>
