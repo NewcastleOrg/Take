@@ -24455,6 +24455,14 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void disableAds(boolean send) {
+        if (!getUserConfig().isPremium()) {
+            getUserConfig()
+                    .getPreferences()
+                    .edit()
+                    .putBoolean("custom_sponsored_disabled", true)
+                    .apply();
+            return;
+        }
         TLRPC.UserFull userFull = getUserFull(getUserConfig().getClientUserId());
         if (userFull == null) return;
         userFull.sponsored_enabled = false;
@@ -24467,6 +24475,11 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isSponsoredDisabled() {
+        if (!getUserConfig().isPremium()) {
+            return getUserConfig()
+                    .getPreferences()
+                    .getBoolean("custom_sponsored_disabled", true);
+        }
         TLRPC.UserFull userFull = getUserFull(getUserConfig().getClientUserId());
         if (userFull == null) return false;
         return !userFull.sponsored_enabled;
