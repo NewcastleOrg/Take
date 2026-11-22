@@ -933,6 +933,10 @@ class ChatMessageLinkPreview {
                         } else {
                             MediaController.getInstance().pauseMessage(cell.currentMessageObject);
                         }
+                    } else if (cell.drawPhotoImage && (cell.documentAttachType == cell.DOCUMENT_ATTACH_TYPE_NONE || cell.documentAttachType == cell.DOCUMENT_ATTACH_TYPE_GIF) && cell.photoImage.isInsideImage(cell.lastTouchX, cell.lastTouchY) && cell.currentMessageObject != null && !cell.currentMessageObject.preview && MessageObject.getMedia(cell.currentMessageObject.messageOwner).webpage != null && TextUtils.isEmpty(MessageObject.getMedia(cell.currentMessageObject.messageOwner).webpage.embed_url)) {
+                        if (cell.delegate != null) {
+                            cell.delegate.didPressImage(cell, cell.lastTouchX, cell.lastTouchY, false);
+                        }
                     } else if (cell.drawInstantView || cell.currentMessageObject != null && cell.currentMessageObject.currentEvent != null && cell.currentMessageObject.currentEvent.action instanceof TLRPC.TL_channelAdminLogEventActionEditMessage) {
                         if (cell.delegate != null) {
                             cell.delegate.didPressInstantButton(cell, cell.drawInstantViewType);
