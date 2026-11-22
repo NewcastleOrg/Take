@@ -715,6 +715,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private final static int add_to_folder = 109;
     private final static int remove_from_folder = 110;
     private final static int community_ungroup = 111;
+    private final static int inu_select_all = 900;
 
     private final static int ARCHIVE_ITEM_STATE_PINNED = 0;
     private final static int ARCHIVE_ITEM_STATE_SHOWED = 1;
@@ -3933,6 +3934,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         undoView.showWithAction(did, UndoView.ACTION_REMOVED_FROM_FOLDER, neverShow.size(), filter, null, null);
                     }
                     hideActionMode(false);
+                } else if (id == inu_select_all) {
+                    for (TLRPC.Dialog d : getDialogsArray(currentAccount, viewPages[0].dialogsType, folderId, false)) {
+                        if (!DialogObject.isFolderDialogId(d.id) && !selectedDialogs.contains(d.id)) {
+                            selectedDialogs.add(d.id);
+                        }
+                    }
+                    updateVisibleRows(MessagesController.UPDATE_MASK_SELECT_DIALOG);
+                    updateCounters(false);
+                    selectedDialogsCountTextView.setNumber(selectedDialogs.size(), true);
                 } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2) {
                     performSelectedDialogsAction(selectedDialogs, id, true, false);
                 }
@@ -6674,6 +6684,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         readItem = otherItem.addSubItem(read, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAsRead));
         clearItem = otherItem.addSubItem(clear, R.drawable.msg_clear, LocaleController.getString(R.string.ClearHistory));
         blockItem = otherItem.addSubItem(block, R.drawable.msg_block, LocaleController.getString(R.string.BlockUser));
+        otherItem.addSubItem(inu_select_all, R.drawable.msg_select, LocaleController.getString(R.string.SelectAll));
 
         muteItem.setOnLongClickListener(e -> {
             performSelectedDialogsAction(selectedDialogs, mute, true, true);
