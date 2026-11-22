@@ -3897,6 +3897,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         break;
                     case ProfileActionsView.KEY_DISCUSS:
+                    case ProfileActionsView.KEY_CHANNEL:
                         openDiscussion();
                         break;
                     case ProfileActionsView.KEY_LEAVE:
@@ -8713,8 +8714,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         if (avatarContainer != null) {
             if (actionsView != null) {
                 if (chatId != 0) {
-                    boolean discuss = ChatObject.isChannel(currentChat) && !currentChat.megagroup && chatInfo != null && chatInfo.linked_chat_id != 0;
+                    boolean discuss = /*ChatObject.isChannel(currentChat) && !currentChat.megagroup && */chatInfo != null && chatInfo.linked_chat_id != 0;
                     actionsView.set(ProfileActionsView.KEY_DISCUSS, discuss);
+                    actionsView.set(ProfileActionsView.KEY_CHANNEL, discuss);
                 }
             }
 
@@ -12330,6 +12332,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
         boolean shareAction = false;
         boolean discussAction = false;
+        boolean channelAction = false;
         boolean giftAction = false;
         boolean streamAction = false;
         boolean voiceChatAction = false;
@@ -12493,6 +12496,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     if (isTopic && ChatObject.canDeleteTopic(currentAccount, chat, topicId)) {
                         otherItem.addSubItem(delete_topic, R.drawable.msg_delete, LocaleController.getPluralString("DeleteTopics", 1));
                     }
+                    if (chatInfo != null && chatInfo.linked_chat_id != 0) {
+                        otherItem.addSubItem(view_discussion, R.drawable.msg_channel, LocaleController.getString(R.string.OpenChannel2));
+                        channelAction = true;
+                    }
                     if (topicId == 0) {
                         otherItem.addSubItem(add_shortcut, R.drawable.msg_home, LocaleController.getString(R.string.AddShortcut));
                     }
@@ -12602,6 +12609,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             actionsView.set(ProfileActionsView.KEY_CALL, callItemVisible);
             actionsView.set(ProfileActionsView.KEY_VIDEO, videoCallItemVisible);
             actionsView.set(ProfileActionsView.KEY_DISCUSS, discussAction);
+            actionsView.set(ProfileActionsView.KEY_CHANNEL, channelAction);
             actionsView.set(ProfileActionsView.KEY_LEAVE, leaveAction);
             actionsView.set(ProfileActionsView.KEY_STORY, addStoryAction);
             actionsView.set(ProfileActionsView.KEY_VOICE_CHAT, voiceChatAction);
