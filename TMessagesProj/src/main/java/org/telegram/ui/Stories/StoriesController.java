@@ -557,6 +557,10 @@ public class StoriesController {
     // connection can't carry the original. A version that already has data is kept, so preloads aren't wasted.
     public static TLRPC.Document getStoryVideoDocument(int currentAccount, TL_stories.StoryItem storyItem) {
         TLRPC.Document main = storyItem.media.getDocument();
+        // HD enabled: always use original video
+        if (MessagesController.getInstance(currentAccount).isStoryQualityFullOnAccount()) {
+            return main;
+        }
         if (main == null || storyItem.media.alt_documents == null) {
             return main;
         }
