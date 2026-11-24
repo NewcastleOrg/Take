@@ -11684,6 +11684,9 @@
 
 
     <!--additional functions-->
+    <string name="RefreshStickerSet">Refresh</string>
+    <string name="StickerSetRefreshed">Pack updated</string>
+    <string name="StickerSetRefreshFailed">Couldn\'t refresh the pack</string>
     <string name="ProxyImportFromClipboard">Import from clipboard</string>
     <string name="ProxyImportNothing">No new proxy links found in clipboard</string>
     <string name="ProxyImported_one">%1$d proxy imported</string>

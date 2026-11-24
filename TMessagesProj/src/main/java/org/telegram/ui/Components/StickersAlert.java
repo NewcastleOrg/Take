@@ -111,6 +111,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import aex.tgmod.helpers.StickerSetHelper;
+
 public class StickersAlert extends BottomSheet implements NotificationCenter.NotificationCenterDelegate {
 
     public final static boolean DISABLE_STICKER_EDITOR = false;
@@ -1123,6 +1125,7 @@ public class StickersAlert extends BottomSheet implements NotificationCenter.Not
         containerView.addView(optionsButton, LayoutHelper.createFrame(40, 40, Gravity.TOP | Gravity.RIGHT, 0, 5, 5, 0));
         optionsButton.addSubItem(1, R.drawable.msg_share, LocaleController.getString(R.string.StickersShare));
         optionsButton.addSubItem(2, R.drawable.msg_link, LocaleController.getString(R.string.CopyLink));
+        optionsButton.addSubItem(100, R.drawable.msg_retry, LocaleController.getString(R.string.RefreshStickerSet));
 
         optionsButton.setOnClickListener(v -> {
             checkOptions();
@@ -1424,6 +1427,8 @@ public class StickersAlert extends BottomSheet implements NotificationCenter.Not
                 dismiss();
                 MediaDataController.getInstance(currentAccount).toggleStickerSet(getContext(), stickerSet, 1, parentFragment, false, false);
             });
+        } else if (id == 100) {
+            StickerSetHelper.refreshStickerSet(currentAccount, (FrameLayout) containerView, resourcesProvider, stickerSet, this::updateStickerSet);
         }
     }
 

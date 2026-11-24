@@ -266,6 +266,9 @@
 
 
     <!--additional functions-->
+    <string name="RefreshStickerSet">Обновить</string>
+    <string name="StickerSetRefreshed">Набор обновлён</string>
+    <string name="StickerSetRefreshFailed">Не удалось обновить набор</string>
     <string name="ProxyImportFromClipboard">Импортировать из буфера обмена</string>
     <string name="ProxyImportNothing">В буфере обмена нет новых ссылок на прокси</string>
     <string name="ProxyImported_one">Импортирован %1$d прокси</string>

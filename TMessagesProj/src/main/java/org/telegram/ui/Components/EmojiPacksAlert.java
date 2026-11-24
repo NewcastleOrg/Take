@@ -84,6 +84,8 @@ import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import aex.tgmod.helpers.StickerSetHelper;
+
 public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.NotificationCenterDelegate {
 
     private LongSparseArray<AnimatedEmojiDrawable> animatedEmojiDrawables;
@@ -1515,6 +1517,16 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
             } catch (Exception e) {
                 FileLog.e(e);
             }
+        } else if (id == 100) {
+            final int index = customEmojiPacks.stickerSets.indexOf(stickerSet);
+            StickerSetHelper.refreshStickerSet(currentAccount, (FrameLayout) containerView, resourcesProvider, stickerSet, newSet -> {
+                if (index < 0 || index >= customEmojiPacks.stickerSets.size()) {
+                    return;
+                }
+                customEmojiPacks.stickerSets.set(index, newSet);
+                customEmojiPacks.putStickerSet(index, newSet);
+                customEmojiPacks.onUpdate();
+            });
         }
     }
 
@@ -1730,6 +1742,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
                 addView(optionsButton, LayoutHelper.createFrame(40, 40, Gravity.TOP | Gravity.RIGHT, 0, 5, 5 - backgroundPaddingLeft / AndroidUtilities.density, 0));
                 optionsButton.addSubItem(1, R.drawable.msg_share, LocaleController.getString(R.string.StickersShare));
                 optionsButton.addSubItem(2, R.drawable.msg_link, LocaleController.getString(R.string.CopyLink));
+                optionsButton.addSubItem(100, R.drawable.msg_retry, LocaleController.getString(R.string.RefreshStickerSet));
                 optionsButton.setOnClickListener(v -> optionsButton.toggleSubMenu());
                 optionsButton.setDelegate(EmojiPacksAlert.this::onSubItemClick);
                 optionsButton.setContentDescription(LocaleController.getString(R.string.AccDescrMoreOptions));
