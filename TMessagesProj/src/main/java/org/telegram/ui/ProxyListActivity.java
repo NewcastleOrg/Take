@@ -76,6 +76,8 @@ import java.util.HashSet;
 import java.util.Collections;
 import java.util.List;
 
+import aex.tgmod.helpers.ProxyImportHelper;
+
 public class ProxyListActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
     private final static boolean IS_PROXY_ROTATION_AVAILABLE = true;
     private static final int MENU_DELETE = 0;
@@ -105,6 +107,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
     private int rotationTimeoutRow;
     private int rotationTimeoutInfoRow;
     private int deleteAllRow;
+    private int proxyImportRow;
 
     private ItemTouchHelper itemTouchHelper;
     private ActionBarMenuItem shareMenuItem;
@@ -498,6 +501,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 ConnectionsManager.setProxySettings(useProxySettings, SharedConfig.currentProxy.settings);
             } else if (position == proxyAddRow) {
                 presentFragment(new ProxySettingsActivity());
+            } else if (position == proxyImportRow) {
+                ProxyImportHelper.importFromClipboard(this);
             } else if (position == deleteAllRow) {
                 AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
                 builder.setMessage(getString(R.string.DeleteAllProxiesConfirm));
@@ -683,6 +688,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             proxyEndRow = -1;
         }
         proxyAddRow = rowCount++;
+        proxyImportRow = rowCount++;
         proxyShadowRow = rowCount++;
         if (proxyList.size() >= 10) {
             deleteAllRow = rowCount++;
@@ -866,7 +872,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
                     ThemeBind.textColor(textCell.getTextView(), Theme.key_windowBackgroundWhiteBlackText);
                     if (position == proxyAddRow) {
-                        textCell.setText(getString(R.string.AddProxy), deleteAllRow != -1);
+                        textCell.setText(getString(R.string.AddProxy), true);
+                    } else if (position == proxyImportRow) {
+                        textCell.setText(getString(R.string.ProxyImportFromClipboard), deleteAllRow != -1);
                     } else if (position == deleteAllRow) {
                         ThemeBind.textColor(textCell.getTextView(), Theme.key_text_RedRegular);
                         textCell.setText(getString(R.string.DeleteAllProxies), false);
@@ -974,6 +982,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     || position == hideProxySponsorRow
                     || position == rotationRow
                     || position == proxyAddRow
+                    || position == proxyImportRow
                     || position == deleteAllRow
                     || position >= proxyStartRow && position < proxyEndRow;
         }
@@ -1037,6 +1046,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return -10;
             } else if (position == rotationTimeoutInfoRow) {
                 return -11;
+            } else if (position == proxyImportRow) {
+                return -13;
             } else if (position >= proxyStartRow && position < proxyEndRow) {
                 return proxyList.get(position - proxyStartRow).hashCode();
             } else {
@@ -1048,7 +1059,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         public int getItemViewType(int position) {
             if (position == useProxyShadowRow || position == proxyShadowRow) {
                 return VIEW_TYPE_SHADOW;
-            } else if (position == proxyAddRow || position == deleteAllRow) {
+            } else if (position == proxyAddRow || position == proxyImportRow || position == deleteAllRow) {
                 return VIEW_TYPE_TEXT_SETTING;
             } else if (position == useProxyRow || position == hideProxySponsorRow || position == rotationRow) {
                 return VIEW_TYPE_TEXT_CHECK;
