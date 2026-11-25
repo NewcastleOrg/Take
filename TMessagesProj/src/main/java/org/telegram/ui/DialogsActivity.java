@@ -285,6 +285,8 @@ import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.util.ClickHelper;
 import me.vkryl.core.BitwiseUtils;
 
+import aex.tgmod.aexPins;
+
 public class DialogsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, FloatingDebugProvider, FactorAnimator.Target, MainTabsActivity.TabFragmentDelegate {
     private final int ADDITIONAL_LIST_HEIGHT_DP = Build.VERSION.SDK_INT >= 31 ? 48 : 0;
 
@@ -8647,11 +8649,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountDefault;
                 }
             } else {
-                if (getUserConfig().isPremium()) {
-                    maxPinnedCount = getMessagesController().maxPinnedDialogsCountPremium;
-                } else {
-                    maxPinnedCount = getMessagesController().maxPinnedDialogsCountDefault;
-                }
+                maxPinnedCount = aexPins.maxPinned(currentAccount); // tgmod: All chats takes as many pins as a folder does
             }
             hasPinAction[0] = !(newPinnedSecretCount + pinnedSecretCount > maxPinnedCount || newPinnedCount + pinnedCount - alreadyAdded > maxPinnedCount);
         }
@@ -9038,6 +9036,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             movingDialogFilters.clear();
         }
         if (movingWas) {
+        	aexPins.saveOrder(currentAccount); // tgmod: one write per drag, not one per row crossed
             getMessagesController().reorderPinnedDialogs(folderId, null, 0);
             movingWas = false;
         }
@@ -9183,15 +9182,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountDefault;
                 }
             } else {
-                maxPinnedCount = getUserConfig().isPremium() ? getMessagesController().dialogFiltersPinnedLimitPremium : getMessagesController().dialogFiltersPinnedLimitDefault;
+                maxPinnedCount = aexPins.maxPinned(currentAccount); // tgmod: All chats takes as many pins as a folder does
             }
             if (newPinnedSecretCount + pinnedSecretCount > maxPinnedCount || newPinnedCount + pinnedCount - alreadyAdded > maxPinnedCount) {
-                if (folderId != 0 || filter != null) {
-                    AlertsCreator.showSimpleAlert(DialogsActivity.this, LocaleController.formatString("PinFolderLimitReached", R.string.PinFolderLimitReached, LocaleController.formatPluralString("Chats", maxPinnedCount)));
-                } else {
-                    LimitReachedBottomSheet limitReachedBottomSheet = new LimitReachedBottomSheet(this, getParentActivity(), LimitReachedBottomSheet.TYPE_PIN_DIALOGS, currentAccount, null);
-                    showDialog(limitReachedBottomSheet);
-                }
+                // tgmod: the same plain alert everywhere, the All chats cap is no longer the one Premium doubles
+                AlertsCreator.showSimpleAlert(DialogsActivity.this, LocaleController.formatString("PinFolderLimitReached", R.string.PinFolderLimitReached, LocaleController.formatPluralString("Chats", maxPinnedCount)));
                 return;
             }
         } else if (action == community_ungroup) {
