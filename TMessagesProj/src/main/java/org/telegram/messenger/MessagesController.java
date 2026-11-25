@@ -17440,6 +17440,9 @@ public class MessagesController extends BaseController implements NotificationCe
             if (response != null) {
                 TLRPC.TL_messages_peerDialogs res = (TLRPC.TL_messages_peerDialogs) response;
                 ArrayList<TLRPC.Dialog> newPinnedDialogs = new ArrayList<>(res.dialogs);
+                if (folderId == 0) {
+                    aexPins.reconcile(currentAccount, newPinnedDialogs);
+                }
                 fetchFolderInLoadedPinnedDialogs(res);
                 TLRPC.TL_messages_dialogs toCache = new TLRPC.TL_messages_dialogs();
                 toCache.users.addAll(res.users);

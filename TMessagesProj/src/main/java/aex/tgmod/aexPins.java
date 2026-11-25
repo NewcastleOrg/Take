@@ -66,6 +66,43 @@ public final class aexPins {
     }
 
     /**
+     * Removes server-side pins that were unpinned on another device.
+     * Local pins beyond the server limit are preserved.
+     */
+    public static void reconcile(int currentAccount, List<TLRPC.Dialog> serverDialogs) {
+        final UserConfig userConfig = UserConfig.getInstance(currentAccount);
+        final ArrayList<Long> mainPins = userConfig.aex.mainPins;
+
+        final HashSet<Long> serverPinnedIds = new HashSet<>();
+
+        for (int a = 0, N = serverDialogs.size(); a < N; a++) {
+            final TLRPC.Dialog dialog = serverDialogs.get(a);
+
+            if (skip(dialog)) {
+                continue;
+            }
+
+            serverPinnedIds.add(dialog.id);
+        }
+
+        final int serverLimit = Math.min(serverMaxPinned(currentAccount), mainPins.size());
+        boolean changed = false;
+
+        for (int a = serverLimit - 1; a >= 0; a--) {
+            final Long dialogId = mainPins.get(a);
+
+            if (!serverPinnedIds.contains(dialogId)) {
+                mainPins.remove(a);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            userConfig.saveConfig(false);
+        }
+    }
+
+    /**
      * Writes {@code order} onto the dialogs and returns whether it grew. A dialog
      * pinned but not listed was pinned elsewhere (or on the server before this
      * device ever ran the feature), so it joins the top, highest pinnedNum first,
