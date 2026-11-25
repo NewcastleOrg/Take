@@ -266,6 +266,7 @@
 
 
     <!--additional functions-->
+    <string name="CreateAsSupergroup">Создать как супергруппу</string>
     <string name="RefreshStickerSet">Обновить</string>
     <string name="StickerSetRefreshed">Набор обновлён</string>
     <string name="StickerSetRefreshFailed">Не удалось обновить набор</string>

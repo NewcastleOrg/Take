@@ -110,6 +110,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
     private String nameToSet;
     private int chatType;
     private boolean canToggleTopics;
+    private boolean asMegagroup;
 
     private RLottieDrawable cameraDrawable;
     
@@ -626,6 +627,14 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                 });
                 presentFragment(fragment);
             }
+            if (view instanceof TextCell) {
+                int pos = listView.getChildAdapterPosition(view);
+                if (pos >= 0 && adapter.getItemViewType(pos) == GroupCreateAdapter.VIEW_TYPE_MEGAGROUP_TOGGLE) {
+                    asMegagroup = !asMegagroup;
+                    ((TextCell) view).setChecked(asMegagroup);
+                    return;
+                }
+            }
             if (view instanceof TextCell && chatType != ChatObject.CHAT_TYPE_FORUM) {
                 if (popupWindow != null && popupWindow.isShowing()) {
                     return;
@@ -684,7 +693,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                 createAfterUpload = true;
             } else {
                 showEditDoneProgress(true);
-                reqId = getMessagesController().createChat(editText.getText().toString(), selectedContacts, null, chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, ttlPeriod, GroupCreateFinalActivity.this);
+                reqId = getMessagesController().createChat(editText.getText().toString(), selectedContacts, null, asMegagroup ? ChatObject.CHAT_TYPE_MEGAGROUP : chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, ttlPeriod, GroupCreateFinalActivity.this);
             }
         });
 
@@ -723,7 +732,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                     if (delegate != null) {
                         delegate.didStartChatCreation();
                     }
-                    getMessagesController().createChat(editText.getText().toString(), selectedContacts, null, chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, ttlPeriod, GroupCreateFinalActivity.this);
+                    getMessagesController().createChat(editText.getText().toString(), selectedContacts, null, asMegagroup ? ChatObject.CHAT_TYPE_MEGAGROUP : chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, ttlPeriod, GroupCreateFinalActivity.this);
                 }
                 showAvatarProgress(false, true);
                 avatarEditor.setImageDrawable(null);
@@ -904,6 +913,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
         private final static int VIEW_TYPE_TEXT_INFO_CELL = 5;
         private final static int VIEW_TYPE_TOPICS = 6;
         private final static int VIEW_TYPE_LAST_EMPTY_VIEW = 7;
+        private final static int VIEW_TYPE_MEGAGROUP_TOGGLE = 100;
 
         ArrayList<InnerItem> items = new ArrayList<>();
 
@@ -919,6 +929,9 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                 items.add(new InnerItem(VIEW_TYPE_TOPICS));
                 items.add(new InnerItem(VIEW_TYPE_TEXT_INFO_CELL, getString(R.string.ForumToggleDescription)));
             } else {
+                if (chatType == ChatObject.CHAT_TYPE_CHAT) {
+                    items.add(new InnerItem(VIEW_TYPE_MEGAGROUP_TOGGLE));
+                }
                 items.add(new InnerItem(VIEW_TYPE_AUTO_DELETE));
                 items.add(new InnerItem(VIEW_TYPE_TEXT_INFO_CELL, getString(R.string.GroupCreateAutodeleteDescription)));
             }
@@ -946,6 +959,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
 
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
+            if (holder.getItemViewType() == VIEW_TYPE_MEGAGROUP_TOGGLE) return true;
             return holder.getItemViewType() == VIEW_TYPE_TEXT_SETTINGS || holder.getItemViewType() == VIEW_TYPE_AUTO_DELETE || holder.getItemViewType() == VIEW_TYPE_TOPICS && canToggleTopics;
         }
 
@@ -981,6 +995,9 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                 case VIEW_TYPE_LAST_EMPTY_VIEW:
                     view = new View(context);
                     view.setTag(RecyclerListView.TAG_NOT_SECTION);
+                    break;
+                case VIEW_TYPE_MEGAGROUP_TOGGLE:
+                    view = new TextCell(context, 23, false, true, getResourceProvider());
                     break;
             }
             return new RecyclerListView.Holder(view);
@@ -1031,6 +1048,11 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                     TextInfoPrivacyCell textInfoPrivacyCell = (TextInfoPrivacyCell) holder.itemView;
                     textInfoPrivacyCell.setText(items.get(position).string);
                     break;
+                case VIEW_TYPE_MEGAGROUP_TOGGLE: {
+                    TextCell textCell = (TextCell) holder.itemView;
+                    textCell.setTextAndCheckAndIcon(getString(R.string.CreateAsSupergroup), asMegagroup, R.drawable.msg_groups_create, true);
+                    break;
+                }
             }
         }
 
